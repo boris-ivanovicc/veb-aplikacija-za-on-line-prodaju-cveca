@@ -1,0 +1,70 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "mysql"
+  url      = env("DATABASE_URL")
+}
+
+model ad_images {
+  id            Int                 @id @default(autoincrement())
+  ad_id         Int
+  original_url  String              @db.VarChar(255)
+  thumbnail_url String              @db.VarChar(255)
+  is_cover      Boolean?            @default(false)
+  file_type     ad_images_file_type
+  ads           ads                 @relation(fields: [ad_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_images_ads")
+
+  @@index([ad_id], map: "fk_images_ads")
+}
+
+model ads {
+  id             Int             @id @default(autoincrement())
+  user_id        Int
+  title          String          @db.VarChar(100)
+  ad_description String?         @db.Text
+  price          Decimal         @db.Decimal(10, 2)
+  ad_status      ads_ad_status?  @default(active)
+  created_at     DateTime?       @default(now()) @db.Timestamp(0)
+  ends_at        DateTime?       @db.Timestamp(0)
+  ad_images      ad_images[]
+  users          users           @relation(fields: [user_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_ads_users")
+  flower_details flower_details?
+
+  @@index([user_id], map: "fk_ads_users")
+}
+
+model flower_details {
+  ad_id         Int      @id
+  flower_name   String   @db.VarChar(100)
+  size_cm       Decimal? @db.Decimal(5, 2)
+  origin        String?  @db.VarChar(100)
+  lifespan_days Int?
+  occasion      String?  @db.VarChar(100)
+  is_potted     Boolean? @default(false)
+  ads           ads      @relation(fields: [ad_id], references: [id], onDelete: Cascade, onUpdate: NoAction, map: "fk_details_ads")
+}
+
+model users {
+  id            Int       @id @default(autoincrement())
+  username      String    @unique(map: "username") @db.VarChar(50)
+  display_name  String?   @db.VarChar(100)
+  email         String    @unique(map: "email") @db.VarChar(100)
+  password_hash String    @db.VarChar(255)
+  avatar_url    String?   @default("avatars/avatar-rose.png") @db.VarChar(255)
+  created_at    DateTime? @default(now()) @db.Timestamp(0)
+  ads           ads[]
+}
+
+enum ad_images_file_type {
+  image_jpeg @map("image/jpeg")
+  image_png  @map("image/png")
+}
+
+enum ads_ad_status {
+  active
+  sold
+  expired
+}
