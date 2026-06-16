@@ -1,19 +1,42 @@
-const prisma = require('../db');
+import { AdInput, AdUpdateInput, AdImageInput } from "./types.js";
+import prisma from '../db.js';
 
-const fetchActiveAds = async (pageNumber: number, itemsPerPage: number) => {
+const buildAdImagesPayload = (images?: AdImageInput[]) => {
+  if (!images || images.length === 0) {
+    return [{
+      original_url: "images/default-flower-image.jpg",
+      thumbnail_url: "images/default-flower-thumbnail.jpg",
+      file_type: 'image_jpeg' as const,
+      is_cover: true
+    }];
+  }
+
+  return images.map((img, index) => {
+    const isCover = index === 0;
+    
+    return {
+      original_url: img.original_url,
+      thumbnail_url: isCover ? (img.thumbnail_url || "") : "",
+      file_type: img.file_type?.toLowerCase().includes('png') ? ('image_png' as const) : ('image_jpeg' as const),
+      is_cover: isCover
+    };
+  });
+};
+
+const getActiveAds = async (pageNumber: number, itemsPerPage: number) => {
   const skipAmount = (pageNumber - 1) * itemsPerPage;
 
   const [ads, totalCount] = await prisma.$transaction([
-    prisma.ad.findMany({
-      where: { status: 'active' },
+    prisma.ads.findMany({
+      where: { ad_status: 'active' },
       skip: skipAmount,
       take: itemsPerPage,
       include: {
         flower_details: true,
-        images: {
+        ad_images: {
           orderBy: { is_cover: 'desc' }
         },
-        user: {
+        users: {
           select: {
             id: true,
             display_name: true,
@@ -23,8 +46,8 @@ const fetchActiveAds = async (pageNumber: number, itemsPerPage: number) => {
       },
       orderBy: { created_at: 'desc' }
     }),
-    prisma.ad.count({
-      where: { status: 'active' }
+    prisma.ads.count({
+      where: { ad_status: 'active' }
     })
   ]);
 
@@ -34,17 +57,15 @@ const fetchActiveAds = async (pageNumber: number, itemsPerPage: number) => {
   };
 };
 
-const getAdById = async(adId: string) => {
-  const ad = await prisma.ad.findUnique({
-    where: {
-      id: adId
-    },
+const getAdById = async (adId: number) => {
+  const ad = await prisma.ads.findUnique({
+    where: { id: adId },
     include: {
       flower_details: true,
-      images:{
-        orderBy: {is_cover: 'desc'}
+      ad_images: {
+        orderBy: { is_cover: 'desc' }
       },
-      user: {
+      users: {
         select: {
           id: true,
           display_name: true,
@@ -58,48 +79,110 @@ const getAdById = async(adId: string) => {
   return ad;
 };
 
-interface CreateAdInput {
-  title: string;
-  description: string;
-  price: number;
-  user_id: string;
-  details: {
-    occasion: string;
-    size_cm: number;
-    origin: string;
-    lifespan_days: number;
-    is_potted: boolean;
+const createAd = async (input: AdInput) => {
+  if (!input.title || !input.price || !input.user_id || !input.details?.flower_name) {
+    throw new Error("Missing required fields to create an ad.");
   }
-}
 
-const createAd = async ({title, description, price, user_id, details}: CreateAdInput) => {
-  const newAd = await prisma.$transaction(async (transaction: any) => {
-    const ad = await transaction.ad.create({
-      data: {title, description, price, user_id, status: 'active'}
-    });
+  const newAd = await prisma.ads.create({
+    data: {
+      title: input.title,
+      ad_description: input.ad_description,
+      price: input.price,
+      user_id: input.user_id,
+      ad_status: 'active',
 
-    await transaction.flower_details.create({
-      data: {
-        ad_id: ad.id,
-        occasion: details.occasion,
-        size_cm: details.size_cm,
-        origin: details.origin,
-        lifespan_days: details.lifespan_days,
-        is_potted: details.is_potted
+      flower_details: {
+        create: {
+          flower_name: input.details.flower_name,
+          occasion: input.details.occasion,
+          size_cm: input.details.size_cm,
+          origin: input.details.origin,
+          lifespan_days: input.details.lifespan_days,
+          is_potted: input.details.is_potted
+        }
+      },
+
+      ad_images: {
+        create: buildAdImagesPayload(input.images)
       }
-    });
-
-    return await transaction.ad.findUnique({
-      where: {id: ad.id},
-      include: {flower_details: true}
-    });
+    },
+    include: {
+      flower_details: true,
+      ad_images: true
+    }
   });
 
   return newAd;
-}
+};
 
-module.exports = {
-  fetchActiveAds,
+const updateAd = async (adId: number, input: AdUpdateInput) => {
+  const existingAd = await prisma.ads.findUnique({
+    where: { id: adId }
+  });
+
+  if (!existingAd) {
+    throw new Error(`Ad with ID ${adId} not found.`);
+  }
+
+  const updatedAd = await prisma.ads.update({
+    where: { id: adId },
+    data: {
+      title: input.title,
+      ad_description: input.ad_description,
+      price: input.price,
+      
+      ...(input.details && {
+        flower_details: {
+          update: {
+            flower_name: input.details.flower_name,
+            occasion: input.details.occasion,
+            size_cm: input.details.size_cm,
+            origin: input.details.origin,
+            lifespan_days: input.details.lifespan_days,
+            is_potted: input.details.is_potted,
+          }
+        }
+      })
+    },
+    include: {
+      flower_details: true,
+      ad_images: {
+        orderBy: { is_cover: 'desc' }
+      }
+    }
+  });
+
+  return updatedAd;
+};
+
+const deleteAd = async (adId: number) => {
+  const existingAd = await prisma.ads.findUnique({
+    where: { id: adId }
+  });
+
+  if (!existingAd) {
+    throw new Error(`Ad with ID ${adId} not found.`);
+  }
+
+  const deletedAd = await prisma.ads.update({
+    where: { id: adId },
+    data: {
+      ad_status: 'deleted'
+    },
+    include: {
+      flower_details: true,
+      ad_images: true
+    }
+  });
+
+  return deletedAd;
+};
+
+export {
+  getActiveAds,
   getAdById,
-  createAd
+  createAd,
+  updateAd,
+  deleteAd
 };
