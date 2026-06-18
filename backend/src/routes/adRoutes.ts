@@ -1,5 +1,6 @@
 import { Router } from "express";
-import * as adController from "../controllers/adController.js";
+import * as adController from "../controllers/adController";
+
 const router = Router();
 
 router.get('/ads', adController.getActiveAds);

@@ -1,4 +1,6 @@
+import "reflect-metadata";
 import express = require('express');
+import { DataSource } from "typeorm";
 
 const adRoutes = require('./adRoutes');
 const userRoutes = require('./userRoutes');

@@ -1,12 +1,12 @@
-import { AdInput, AdUpdateInput, AdImageInput } from "./types.js";
-import prisma from '../db.js';
+import pool from '../config/db';
+import { AdInput, AdUpdateInput, AdImageInput } from "./types";
 
 const buildAdImagesPayload = (images?: AdImageInput[]) => {
   if (!images || images.length === 0) {
     return [{
       original_url: "images/default-flower-image.jpg",
       thumbnail_url: "images/default-flower-thumbnail.jpg",
-      file_type: 'image_jpeg' as const,
+      file_type: 'image_jpeg',
       is_cover: true
     }];
   }
@@ -17,172 +17,286 @@ const buildAdImagesPayload = (images?: AdImageInput[]) => {
     return {
       original_url: img.original_url,
       thumbnail_url: isCover ? (img.thumbnail_url || "") : "",
-      file_type: img.file_type?.toLowerCase().includes('png') ? ('image_png' as const) : ('image_jpeg' as const),
+      file_type: img.file_type?.toLowerCase().includes('png') ? 'image_png' : 'image_jpeg',
       is_cover: isCover
     };
   });
 };
 
-const getActiveAds = async (pageNumber: number, itemsPerPage: number) => {
+export const getActiveAds = async (pageNumber: number, itemsPerPage: number) => {
   const skipAmount = (pageNumber - 1) * itemsPerPage;
 
-  const [ads, totalCount] = await prisma.$transaction([
-    prisma.ads.findMany({
-      where: { ad_status: 'active' },
-      skip: skipAmount,
-      take: itemsPerPage,
-      include: {
-        flower_details: true,
-        ad_images: {
-          orderBy: { is_cover: 'desc' }
-        },
-        users: {
-          select: {
-            id: true,
-            display_name: true,
-            avatar_url: true
-          }
-        }
-      },
-      orderBy: { created_at: 'desc' }
-    }),
-    prisma.ads.count({
-      where: { ad_status: 'active' }
-    })
-  ]);
+  const [countResult] = await pool.query(
+    'SELECT COUNT(*) as total FROM ads WHERE ad_status = ?',
+    ['active']
+  );
+  const totalCount = (countResult as any[])[0].total;
+
+  const [ads] = await pool.query(`
+    SELECT 
+      a.*,
+      f.flower_name,
+      f.occasion,
+      f.size_cm,
+      f.origin,
+      f.lifespan_days,
+      f.is_potted,
+      u.id as user_id,
+      u.display_name,
+      u.avatar_url,
+      (
+        SELECT JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'id', ai.id,
+            'original_url', ai.original_url,
+            'thumbnail_url', ai.thumbnail_url,
+            'file_type', ai.file_type,
+            'is_cover', ai.is_cover
+          )
+        )
+        FROM ad_images ai
+        WHERE ai.ad_id = a.id
+        ORDER BY ai.is_cover DESC
+      ) as ad_images
+    FROM ads a
+    LEFT JOIN flower_details f ON a.id = f.ad_id
+    LEFT JOIN users u ON a.user_id = u.id
+    WHERE a.ad_status = ?
+    ORDER BY a.created_at DESC
+    LIMIT ? OFFSET ?
+  `, ['active', itemsPerPage, skipAmount]);
+
+  const parsedAds = (ads as any[]).map(ad => ({
+    ...ad,
+    ad_images: ad.ad_images ? JSON.parse(ad.ad_images) : []
+  }));
 
   return {
-    ads,
+    ads: parsedAds,
     totalCount
   };
 };
 
-const getAdById = async (adId: number) => {
-  const ad = await prisma.ads.findUnique({
-    where: { id: adId },
-    include: {
-      flower_details: true,
-      ad_images: {
-        orderBy: { is_cover: 'desc' }
-      },
-      users: {
-        select: {
-          id: true,
-          display_name: true,
-          avatar_url: true,
-          created_at: true
-        }
-      }
-    }
-  });
+export const getAdById = async (adId: number) => {
+  const [rows] = await pool.query(`
+    SELECT 
+      a.*,
+      f.flower_name,
+      f.occasion,
+      f.size_cm,
+      f.origin,
+      f.lifespan_days,
+      f.is_potted,
+      u.id as user_id,
+      u.display_name,
+      u.avatar_url,
+      u.created_at as user_created_at,
+      (
+        SELECT JSON_ARRAYAGG(
+          JSON_OBJECT(
+            'id', ai.id,
+            'original_url', ai.original_url,
+            'thumbnail_url', ai.thumbnail_url,
+            'file_type', ai.file_type,
+            'is_cover', ai.is_cover
+          )
+        )
+        FROM ad_images ai
+        WHERE ai.ad_id = a.id
+        ORDER BY ai.is_cover DESC
+      ) as ad_images
+    FROM ads a
+    LEFT JOIN flower_details f ON a.id = f.ad_id
+    LEFT JOIN users u ON a.user_id = u.id
+    WHERE a.id = ?
+  `, [adId]);
+
+  const ads = rows as any[];
+  if (ads.length === 0) {
+    return null;
+  }
+
+  const ad = ads[0];
+  if (ad.ad_images && typeof ad.ad_images === 'string') {
+    ad.ad_images = JSON.parse(ad.ad_images);
+  }
+
+  if (ad.user_id) {
+    ad.users = {
+      id: ad.user_id,
+      display_name: ad.display_name,
+      avatar_url: ad.avatar_url,
+      created_at: ad.user_created_at
+    };
+    delete ad.user_id;
+    delete ad.display_name;
+    delete ad.avatar_url;
+    delete ad.user_created_at;
+  }
+
+  if (ad.flower_name) {
+    ad.flower_details = {
+      flower_name: ad.flower_name,
+      occasion: ad.occasion,
+      size_cm: ad.size_cm,
+      origin: ad.origin,
+      lifespan_days: ad.lifespan_days,
+      is_potted: ad.is_potted
+    };
+    delete ad.flower_name;
+    delete ad.occasion;
+    delete ad.size_cm;
+    delete ad.origin;
+    delete ad.lifespan_days;
+    delete ad.is_potted;
+  }
 
   return ad;
 };
 
-const createAd = async (input: AdInput) => {
+export const createAd = async (input: AdInput) => {
   if (!input.title || !input.price || !input.user_id || !input.details?.flower_name) {
     throw new Error("Missing required fields to create an ad.");
   }
 
-  const newAd = await prisma.ads.create({
-    data: {
-      title: input.title,
-      ad_description: input.ad_description,
-      price: input.price,
-      user_id: input.user_id,
-      ad_status: 'active',
+  const connection = await pool.getConnection();
+  await connection.beginTransaction();
 
-      flower_details: {
-        create: {
-          flower_name: input.details.flower_name,
-          occasion: input.details.occasion,
-          size_cm: input.details.size_cm,
-          origin: input.details.origin,
-          lifespan_days: input.details.lifespan_days,
-          is_potted: input.details.is_potted
-        }
-      },
+  try {
+    const [adResult] = await connection.query(
+      `INSERT INTO ads (title, ad_description, price, user_id, ad_status) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [input.title, input.ad_description, input.price, input.user_id, 'active']
+    );
+    const adId = (adResult as any).insertId;
 
-      ad_images: {
-        create: buildAdImagesPayload(input.images)
-      }
-    },
-    include: {
-      flower_details: true,
-      ad_images: true
+    await connection.query(
+      `INSERT INTO flower_details (ad_id, flower_name, occasion, size_cm, origin, lifespan_days, is_potted)
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        adId,
+        input.details.flower_name,
+        input.details.occasion || null,
+        input.details.size_cm || null,
+        input.details.origin || null,
+        input.details.lifespan_days || null,
+        input.details.is_potted || false
+      ]
+    );
+
+    const imagePayload = buildAdImagesPayload(input.images);
+    for (const img of imagePayload) {
+      await connection.query(
+        `INSERT INTO ad_images (ad_id, original_url, thumbnail_url, file_type, is_cover)
+         VALUES (?, ?, ?, ?, ?)`,
+        [adId, img.original_url, img.thumbnail_url, img.file_type, img.is_cover]
+      );
     }
-  });
 
-  return newAd;
+    await connection.commit();
+    connection.release();
+
+    return await getAdById(adId);
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    throw error;
+  }
 };
 
-const updateAd = async (adId: number, input: AdUpdateInput) => {
-  const existingAd = await prisma.ads.findUnique({
-    where: { id: adId }
-  });
-
+export const updateAd = async (adId: number, input: AdUpdateInput) => {
+  const existingAd = await getAdById(adId);
   if (!existingAd) {
     throw new Error(`Ad with ID ${adId} not found.`);
   }
 
-  const updatedAd = await prisma.ads.update({
-    where: { id: adId },
-    data: {
-      title: input.title,
-      ad_description: input.ad_description,
-      price: input.price,
-      
-      ...(input.details && {
-        flower_details: {
-          update: {
-            flower_name: input.details.flower_name,
-            occasion: input.details.occasion,
-            size_cm: input.details.size_cm,
-            origin: input.details.origin,
-            lifespan_days: input.details.lifespan_days,
-            is_potted: input.details.is_potted,
-          }
-        }
-      })
-    },
-    include: {
-      flower_details: true,
-      ad_images: {
-        orderBy: { is_cover: 'desc' }
+  const connection = await pool.getConnection();
+  await connection.beginTransaction();
+
+  try {
+    const updates: string[] = [];
+    const values: any[] = [];
+
+    if (input.title !== undefined) {
+      updates.push('title = ?');
+      values.push(input.title);
+    }
+    if (input.ad_description !== undefined) {
+      updates.push('ad_description = ?');
+      values.push(input.ad_description);
+    }
+    if (input.price !== undefined) {
+      updates.push('price = ?');
+      values.push(input.price);
+    }
+
+    if (updates.length > 0) {
+      values.push(adId);
+      await connection.query(
+        `UPDATE ads SET ${updates.join(', ')} WHERE id = ?`,
+        values
+      );
+    }
+
+    if (input.details) {
+      const flowerUpdates: string[] = [];
+      const flowerValues: any[] = [];
+
+      if (input.details.flower_name !== undefined) {
+        flowerUpdates.push('flower_name = ?');
+        flowerValues.push(input.details.flower_name);
+      }
+      if (input.details.occasion !== undefined) {
+        flowerUpdates.push('occasion = ?');
+        flowerValues.push(input.details.occasion);
+      }
+      if (input.details.size_cm !== undefined) {
+        flowerUpdates.push('size_cm = ?');
+        flowerValues.push(input.details.size_cm);
+      }
+      if (input.details.origin !== undefined) {
+        flowerUpdates.push('origin = ?');
+        flowerValues.push(input.details.origin);
+      }
+      if (input.details.lifespan_days !== undefined) {
+        flowerUpdates.push('lifespan_days = ?');
+        flowerValues.push(input.details.lifespan_days);
+      }
+      if (input.details.is_potted !== undefined) {
+        flowerUpdates.push('is_potted = ?');
+        flowerValues.push(input.details.is_potted);
+      }
+
+      if (flowerUpdates.length > 0) {
+        flowerValues.push(adId);
+        await connection.query(
+          `UPDATE flower_details SET ${flowerUpdates.join(', ')} WHERE ad_id = ?`,
+          flowerValues
+        );
       }
     }
-  });
 
-  return updatedAd;
+    await connection.commit();
+    connection.release();
+
+    return await getAdById(adId);
+  } catch (error) {
+    await connection.rollback();
+    connection.release();
+    throw error;
+  }
 };
 
-const deleteAd = async (adId: number) => {
-  const existingAd = await prisma.ads.findUnique({
-    where: { id: adId }
-  });
-
+export const deleteAd = async (adId: number) => {
+  const existingAd = await getAdById(adId);
   if (!existingAd) {
     throw new Error(`Ad with ID ${adId} not found.`);
   }
 
-  const deletedAd = await prisma.ads.update({
-    where: { id: adId },
-    data: {
-      ad_status: 'deleted'
-    },
-    include: {
-      flower_details: true,
-      ad_images: true
-    }
-  });
+  await pool.query(
+    `UPDATE ads SET ad_status = ? WHERE id = ?`,
+    ['deleted', adId]
+  );
 
-  return deletedAd;
-};
-
-export {
-  getActiveAds,
-  getAdById,
-  createAd,
-  updateAd,
-  deleteAd
+  return await getAdById(adId);
 };

@@ -4,7 +4,7 @@ import MainLayout from '@/components/MainLayout.vue'
 
 <template>
     <MainLayout>
-        div class="card auth-card">
+        <div class="card auth-card">
             <div class="card-header">
                 <h3>Prijavi se</h3>
             </div>

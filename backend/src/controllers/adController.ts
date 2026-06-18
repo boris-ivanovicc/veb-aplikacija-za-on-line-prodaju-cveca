@@ -1,7 +1,7 @@
 import { Request, Response } from "express";
-import * as adService from '../services/adService.js';
+import * as adService from '../services/adService';
 
-const getActiveAds = async (req: Request, res: Response) => {
+export const getActiveAds = async (req: Request, res: Response) => {
   try {
     const page = parseInt(req.query.page as string) || 1;
     const limit = parseInt(req.query.limit as string) || 12;
@@ -29,7 +29,7 @@ const getActiveAds = async (req: Request, res: Response) => {
   }
 };
 
-const getAdById = async (req: Request, res: Response) => {
+export const getAdById = async (req: Request, res: Response) => {
   try{
     const adId = Number(req.params.id);
 
@@ -37,7 +37,7 @@ const getAdById = async (req: Request, res: Response) => {
       return res.status(400).json({
         success: false,
         error: 'Advertisement ID must be a valid number.'
-      })
+      });
     }
 
     const ad = await adService.getAdById(adId);
@@ -62,7 +62,7 @@ const getAdById = async (req: Request, res: Response) => {
   }
 };
 
-const createAd = async (req: Request, res: Response) => {
+export const createAd = async (req: Request, res: Response) => {
   try{
     const newAd = await adService.createAd(req.body);
 
@@ -79,7 +79,7 @@ const createAd = async (req: Request, res: Response) => {
   }
 };
 
-const updateAd = async (req: Request, res: Response) => {
+export const updateAd = async (req: Request, res: Response) => {
   try {
     const adId = Number(req.params.id);
 
@@ -113,7 +113,7 @@ const updateAd = async (req: Request, res: Response) => {
   }
 };
 
-const deleteAd = async (req: Request, res: Response) => {
+export const deleteAd = async (req: Request, res: Response) => {
   try {
     const adId = Number(req.params.id);
 
@@ -145,12 +145,4 @@ const deleteAd = async (req: Request, res: Response) => {
       error: 'Internal server error while deleting advertisement.'
     });
   }
-};
-
-export {
-  getActiveAds,
-  getAdById,
-  createAd,
-  updateAd,
-  deleteAd
 };
