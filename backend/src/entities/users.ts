@@ -1,3 +1,4 @@
+import "reflect-metadata";
 import {
   Entity,
   PrimaryGeneratedColumn,
@@ -5,12 +6,11 @@ import {
   OneToMany,
   Index,
 } from "typeorm";
-
 import { Ads } from "./ads";
 
 @Entity("users")
-@Index("username", ["username"], { unique: true })
-@Index("email", ["email"], { unique: true })
+@Index("idx_users_username", ["username"], { unique: true })
+@Index("idx_users_email", ["email"], { unique: true })
 export class Users {
   @PrimaryGeneratedColumn({ type: "int", name: "id", unsigned: true })
   id!: number;
@@ -30,7 +30,6 @@ export class Users {
   @Column("varchar", {
     name: "avatar_url",
     length: 255,
-    default: "avatars/avatar-rose.png",
     nullable: true,
   })
   avatarUrl!: string | null;
@@ -41,6 +40,6 @@ export class Users {
   })
   createdAt!: Date;
 
-  @OneToMany(() => Ads, (ads: Ads) => ads.user)
+  @OneToMany(() => Ads, (ads) => ads.user)
   ads!: Ads[];
 }

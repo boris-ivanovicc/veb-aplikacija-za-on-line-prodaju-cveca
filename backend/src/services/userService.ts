@@ -1,16 +1,13 @@
 import bcrypt from "bcrypt";
 import jwt from "jsonwebtoken";
 import dotenv from "dotenv";
-
 import { AppDataSource } from "../config/dataSource";
 import { Users } from "../entities/users";
 
 dotenv.config();
 
 const JWT_KEY = String(process.env.JWT_KEY);
-
 const userRepo = AppDataSource.getRepository(Users);
-
 
 const getUserById = async (id: number) => {
   return userRepo.findOneOrFail({
@@ -26,13 +23,13 @@ const getUserById = async (id: number) => {
   });
 };
 
-
 const getUserByUsername = async (username: string) => {
-  return userRepo.findOne({
-    where: { username },
+  return userRepo.findOneOrFail({
+    where: {
+      username,
+    },
   });
 };
-
 
 const register = async (
   username: string,
@@ -62,13 +59,11 @@ const register = async (
   return getUserById(user.id);
 };
 
-
-const login = async (username: string, password: string) => {
+const login = async (
+  username: string,
+  password: string
+) => {
   const user = await getUserByUsername(username);
-
-  if (!user) {
-    throw new Error("INCORRECT_USERNAME_OR_PASSWORD");
-  }
 
   const validPassword = await bcrypt.compare(
     password,
@@ -85,23 +80,39 @@ const login = async (username: string, password: string) => {
   };
 
   return {
-    access: jwt.sign(payload, JWT_KEY, { expiresIn: "30m" }),
-    refresh: jwt.sign(payload, JWT_KEY, { expiresIn: "8d" }),
+    access: jwt.sign(
+      payload,
+      JWT_KEY,
+      { expiresIn: "30m" }
+    ),
+    refresh: jwt.sign(
+      payload,
+      JWT_KEY,
+      { expiresIn: "8d" }
+    ),
   };
 };
 
-
-const refreshToken = async (refresh: string) => {
+const refreshToken = async (
+  refresh: string
+) => {
   try {
-    const decoded = jwt.verify(refresh, JWT_KEY) as any;
+    const decoded = jwt.verify(
+      refresh,
+      JWT_KEY
+    ) as jwt.JwtPayload;
 
     const payload = {
-      id: decoded.id,
-      username: decoded.username,
+      id: decoded.id as number,
+      username: decoded.username as string,
     };
 
     return {
-      access: jwt.sign(payload, JWT_KEY, { expiresIn: "30m" }),
+      access: jwt.sign(
+        payload,
+        JWT_KEY,
+        { expiresIn: "30m" }
+      ),
       refresh,
     };
   } catch {

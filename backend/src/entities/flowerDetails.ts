@@ -1,16 +1,19 @@
+import "reflect-metadata";
 import {
   Entity,
+  PrimaryColumn,
   Column,
   OneToOne,
   JoinColumn,
-  PrimaryColumn,
+  Index,
 } from "typeorm";
-
 import { Ads } from "./ads";
 
 @Entity("flower_details")
+@Index("idx_flower_details_flower_name", ["flowerName"])
+@Index("idx_flower_details_occasion", ["occasion"])
 export class FlowerDetails {
-  @PrimaryColumn({ type: "int", name: "ad_id" })
+  @PrimaryColumn({ type: "int", name: "ad_id", unsigned: true })
   adId!: number;
 
   @Column("varchar", { name: "flower_name", length: 100 })
@@ -18,7 +21,7 @@ export class FlowerDetails {
 
   @Column("decimal", {
     name: "size_cm",
-    precision: 5,
+    precision: 8,
     scale: 2,
     nullable: true,
   })
@@ -33,12 +36,14 @@ export class FlowerDetails {
   @Column("varchar", { name: "occasion", length: 100, nullable: true })
   occasion!: string | null;
 
-  @Column("boolean", { name: "is_potted", default: false, nullable: true })
-  isPotted!: boolean | null;
-
-  @OneToOne(() => Ads, (ads: Ads) => ads.flowerDetails, {
-    onDelete: "CASCADE",
+  @Column("tinyint", { 
+    name: "is_potted", 
+    nullable: true, 
+    default: 0 
   })
+  isPotted!: number | null;
+
+  @OneToOne(() => Ads, (ads) => ads.flowerDetail, { onDelete: "CASCADE" })
   @JoinColumn({ name: "ad_id" })
   ad!: Ads;
 }
