@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { onMounted, ref } from 'vue'
 import { RouterLink } from 'vue-router'
-
 import type { UserModel } from '@/models/user.model'
 import { AuthService } from '@/services/auth.service'
 import { MainService } from '@/services/main.service'
@@ -76,7 +75,9 @@ onMounted(async () => {
 
       <template v-if="isLoggedIn && self">
         <span style="color: #ffe5e5ea; font-size: 0.9rem;">{{ self.display_name || self.username }}</span>
-        <button @click="doLogout" class="auth-btn">Logout</button>
+        <a href="#" @click.prevent="doLogout" class="auth-btn">
+          Logout
+        </a>
       </template>
       <template v-else>
         <RouterLink to="/login" class="login-link">Login</RouterLink>

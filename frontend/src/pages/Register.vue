@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-
 import MainLayout from '../components/MainLayout.vue'
 import { MainService } from '@/services/main.service'
 import { Alerts } from '../alerts'
@@ -12,8 +11,10 @@ const username = ref('')
 const email = ref('')
 const password = ref('')
 const displayName = ref('')
+const isLoading = ref(false)
 
 async function doRegister() {
+  isLoading.value = true
   try {
     await MainService.register(
       username.value,
@@ -22,11 +23,11 @@ async function doRegister() {
       displayName.value
     )
 
-    Alerts.showSuccess('Nalog je uspešno kreiran.')
+    Alerts.showSuccess('Account successfully created.')
     router.push('/login')
 
   } catch {
-    Alerts.showError('Registracija nije uspela. Proveri podatke.')
+    Alerts.showError('Registration was unsuccessful. Check your input.')
   }
 }
 </script>
@@ -43,20 +44,29 @@ async function doRegister() {
         <form class="register-form">
           <div class="form-grid">
             <div class="form-group">
-              <label for="name">Username</label>
+              <label for="username">Username</label>
               <input class="form-control" v-model="username">
             </div>
+            
+            <div class="form-group">
+              <label for="display_name">Display Name</label>
+              <input class="form-control" v-model="displayName">
+            </div>
+
             <div class="form-group">
               <label for="email">Email</label>
               <input class="form-control" v-model="email">
             </div>
+
             <div class="form-group">
               <label for="password">Password</label>
               <input type="password" class="form-control" v-model="password">
             </div>
           </div>
 
-          <button @click="doRegister" class="btn-submit">Register Account</button>
+          <button @click="doRegister" class="btn-submit" :disabled="isLoading">
+            {{ isLoading ? 'Registering...' : 'Register Account' }}
+          </button>
         </form>
 
         <hr class="panel-divider" />
