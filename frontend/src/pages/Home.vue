@@ -4,6 +4,6 @@ import MainLayout from '@/components/MainLayout.vue'
 
 <template>
     <MainLayout>
-        Test1
+        
     </MainLayout>
 </template>

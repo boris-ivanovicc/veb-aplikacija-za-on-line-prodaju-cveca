@@ -1,8 +1,49 @@
-import express = require('express');
-import cors = require('cors');
+import "reflect-metadata";
+import express from 'express';
+import cors from 'cors';
+import dotenv from 'dotenv';
+import adRoutes from './routes/adRoutes';
+import pool from './config/db';
+import { userRoutes } from './routes/userRoutes';
+import { AppDataSource } from './config/dataSource';
+
+dotenv.config();
 
 const app = express();
 const PORT = process.env.PORT || 3000;
 
 app.use(cors());
 app.use(express.json());
+
+app.use("/api", adRoutes);
+app.use("/api", userRoutes);
+
+app.get('/api/test-db', async (req, res) => {
+    try {
+        const [rows] = await pool.query('SELECT 1 + 1 AS result');
+        res.json({ 
+            success: true, 
+            message: 'Database connected successfully!',
+            data: rows 
+        });
+    } catch (error) {
+        console.error('Database connection error:', error);
+        res.status(500).json({ 
+            success: false, 
+            message: 'Database connection failed',
+            error: error instanceof Error ? error.message : 'Unknown error'
+        });
+    }
+});
+
+AppDataSource.initialize()
+  .then(() => {
+    console.log('Data Source initialized');
+    app.listen(PORT, () => {
+        console.log(`Server running on port ${PORT}`);
+    });
+  })
+  .catch((error) => {
+    console.error('Data Source initialization error:', error);
+    process.exit(1);
+  });
