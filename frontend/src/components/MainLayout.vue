@@ -39,7 +39,7 @@ onMounted(async () => {
   isLoggedIn.value = true
 
   try {
-    const rsp = await MainService.useAxios('/user/self')
+    const rsp = await MainService.useAxios('/users/self')
     self.value = rsp.data?.data || rsp.data
   } catch (error) {
     console.error('Failed to load profile:', error)
@@ -51,47 +51,49 @@ onMounted(async () => {
 </script>
 
 <template>
-  <nav class="navbar">
-    <div class="logo">
-      <strong>FlowerShop</strong>
-    </div>
+  <div class="content">
+    <nav class="navbar">
+      <div class="logo">
+        <strong>FlowerShop</strong>
+      </div>
 
-    <div class="menu">
-      <RouterLink v-for="item in navItems" :key="item.name" :to="item.path">
-        {{ item.name }}
-      </RouterLink>
-    </div>
+      <div class="menu">
+        <RouterLink v-for="item in navItems" :key="item.name" :to="item.path">
+          {{ item.name }}
+        </RouterLink>
+      </div>
 
-    <div class="actions">
-      <a href="#cart">
-        <!--Cart SVG-->
-        <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"
-          stroke-linecap="round" stroke-linejoin="round">
-          <circle cx="9" cy="21" r="1"></circle>
-          <circle cx="20" cy="21" r="1"></circle>
-          <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
-        </svg>
-      </a>
-
-      <template v-if="isLoggedIn && self">
-        <span style="color: #ffe5e5ea; font-size: 0.9rem;">{{ self.display_name || self.username }}</span>
-        <a href="#" @click.prevent="doLogout" class="auth-btn">
-          Logout
+      <div class="actions">
+        <a href="#cart">
+          <!--Cart SVG-->
+          <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"
+            stroke-linecap="round" stroke-linejoin="round">
+            <circle cx="9" cy="21" r="1"></circle>
+            <circle cx="20" cy="21" r="1"></circle>
+            <path d="M1 1h4l2.68 13.39a2 2 0 0 0 2 1.61h9.72a2 2 0 0 0 2-1.61L23 6H6"></path>
+          </svg>
         </a>
-      </template>
-      <template v-else>
-        <RouterLink to="/login" class="login-link">Login</RouterLink>
-      </template>
-    </div>
-  </nav>
 
-  <main class="page-content">
-    <slot />
-  </main>
+        <template v-if="isLoggedIn && self">
+          <span style="color: #ffe5e5ea; font-size: 0.9rem;">{{ self.display_name || self.username }}</span>
+          <a href="#" @click.prevent="doLogout" class="auth-btn">
+            Logout
+          </a>
+        </template>
+        <template v-else>
+          <RouterLink to="/login" class="login-link">Login</RouterLink>
+        </template>
+      </div>
+    </nav>
 
-  <footer>
-    <p>&copy; {{ currentYear }} FlowerShop. | Belgrade, Serbia</p>
-  </footer>
+    <main class="page-content">
+      <slot />
+    </main>
+
+    <footer>
+      <p>&copy; {{ currentYear }} FlowerShop. | Belgrade, Serbia</p>
+    </footer>
+  </div>
 </template>
 
 <style>
@@ -105,6 +107,16 @@ body {
 </style>
 
 <style scoped>
+.content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+}
+
+.page-content {
+  flex: 1;
+}
+
 .navbar {
   display: flex;
   justify-content: space-between;
@@ -148,6 +160,7 @@ a:hover {
 }
 
 footer {
+  margin-top: auto;
   padding: 1.2rem;
   text-align: center;
   background-color: #121d12;

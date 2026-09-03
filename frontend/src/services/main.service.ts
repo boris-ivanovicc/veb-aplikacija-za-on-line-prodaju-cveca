@@ -12,7 +12,7 @@ const client = axios.create({
 export class MainService {
 
   static login(username: string, password: string) {
-    return client.post("/user/login", {  
+    return client.post("/users/login", {  
       username,
       password
     });
@@ -25,7 +25,7 @@ export class MainService {
     display_name: string
   ) {
     console.log('Frontend sending:', { username, email, display_name });
-    return client.post("/user/register", {  
+    return client.post("/users/register", {  
       username,
       email,
       password,
@@ -58,5 +58,33 @@ export class MainService {
     }
 
     return rsp;
+  }
+
+  static getAdById(adId: number | string) {
+    return client.get(`/ads/${adId}`);
+  }
+
+  static getAds() {
+    return client.get('/ads');
+  }
+
+  static async createAd(adData: object) {
+    const token = AuthService.getAccessToken();
+    console.log("Sending to backend:", JSON.stringify(adData, null, 2));
+
+    return await client.post("/ads", adData, {
+      headers: {
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        "Content-Type": "application/json"
+      }
+    });
+  }
+
+  static updateAd(adId: number, adData: object) {
+    return client.put(`/ads/${adId}`, adData);
+  }
+
+  static deleteAd(adId: number) {
+    return client.delete(`/ads/${adId}`);
   }
 }

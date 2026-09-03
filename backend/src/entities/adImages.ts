@@ -34,7 +34,7 @@ export class AdImages {
 
   @Column("enum", {
     name: "file_type",
-    enum: ["image/jpeg", "image/png", "image/webp", "image/gif"],
+    enum: ["png", "jpeg"],
   })
   fileType!: string;
 

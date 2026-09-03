@@ -1,65 +1,24 @@
 <script setup>
-import { ref, computed, watch } from 'vue'
+import { ref, computed, watch, onMounted } from 'vue'
 import MainLayout from '@/components/MainLayout.vue'
+import { MainService } from '@/services/main.service'
 
-const ads = ref([
-  {
-    id: 1,
-    title: 'Red Rose Bouquet',
-    category: 'Roses',
-    price: 45,
-    location: 'Belgrade',
-    date: '2026-06-15',
-    image: 'https://images.unsplash.com/photo-1561181286-d3fee7d55364?q=80&w=400',
-    flowerDetails: { origin: 'Serbia', lifespanDays: 7, occasion: 'Anniversary', isPotted: false }
-  },
-  {
-    id: 2,
-    title: 'Minimalist Monstera',
-    category: 'Indoor',
-    price: 25,
-    location: 'Novi Sad',
-    date: '2026-06-17',
-    image: 'https://images.unsplash.com/photo-1614594975525-e45190c55d0b?q=80&w=400',
-    flowerDetails: { origin: 'Tropical', lifespanDays: null, occasion: 'Home Decor', isPotted: true }
-  },
-  {
-    id: 3,
-    title: 'Spring Wildflower Mix',
-    category: 'Bouquet',
-    price: 35,
-    location: 'Niš',
-    date: '2026-06-10',
-    image: 'https://images.unsplash.com/photo-1525310072745-f49212b5ac6d?q=80&w=400',
-    flowerDetails: { origin: 'Mountainous', lifespanDays: 5, occasion: 'Gift', isPotted: false }
-  },
-  {
-    id: 4,
-    title: 'White Wedding Peonies',
-    category: 'Bouquet',
-    price: 60,
-    location: 'Belgrade',
-    date: '2026-06-18',
-    image: 'https://images.unsplash.com/photo-1533616688419-b7a585564566?q=80&w=400',
-    flowerDetails: { origin: 'Local', lifespanDays: 4, occasion: 'Wedding', isPotted: false }
-  },
-  {
-    id: 5,
-    title: 'Pink Tulip Bunch',
-    category: 'Bouquet',
-    price: 20,
-    location: 'Kragujevac',
-    date: '2026-06-12',
-    image: 'https://images.unsplash.com/photo-1520763185298-1b434c919102?q=80&w=400',
-    flowerDetails: { origin: 'Dutch', lifespanDays: 6, occasion: 'Birthday', isPotted: false }
-  },
-])
+const ads = ref([])
+
+onMounted(async () => {
+  try {
+    const rsp = await MainService.getAds()
+    ads.value = rsp.data?.data || (Array.isArray(rsp.data) ? rsp.data : (rsp.data?.ads || []))
+  } catch (err) {
+    console.error("Failed to load ads:", err)
+  }
+})
 
 const searchQuery = ref('')
 const selectedCategory = ref('')
 const sortBy = ref('newest')
 const currentPage = ref(1)
-const itemsPerPage = 3
+const itemsPerPage = 9
 
 const filteredAndSortedAds = computed(() => {
   let result = [...ads.value]
@@ -67,10 +26,17 @@ const filteredAndSortedAds = computed(() => {
     const query = searchQuery.value.toLowerCase()
     result = result.filter(ad => ad.title.toLowerCase().includes(query))
   }
-  if (selectedCategory.value) result = result.filter(ad => ad.category === selectedCategory.value)
-  if (sortBy.value === 'price-low') result.sort((a, b) => a.price - b.price)
-  else if (sortBy.value === 'price-high') result.sort((a, b) => b.price - a.price)
-  else if (sortBy.value === 'newest') result.sort((a, b) => new Date(b.date) - new Date(a.date))
+  if (selectedCategory.value) {
+    result = result.filter(ad => ad.category === selectedCategory.value)
+  }
+
+  if (sortBy.value === 'price-low') {
+    result.sort((a, b) => a.price - b.price)
+  } else if (sortBy.value === 'price-high') {
+    result.sort((a, b) => b.price - a.price)
+  } else if (sortBy.value === 'newest') {
+    result.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date))
+  }
   return result
 })
 
@@ -81,6 +47,16 @@ const paginatedAds = computed(() => {
 })
 
 watch([searchQuery, selectedCategory, sortBy], () => { currentPage.value = 1 })
+
+function getCoverImage(ad) {
+  if (!ad.ad_images || ad.ad_images.length === 0) return ''
+  const coverImage = ad.ad_images.find(img => img.is_cover === 1 || img.is_cover === true)
+  return (coverImage || ad.ad_images[0])?.thumbnail_url || ''
+}
+
+function addToCart(ad) {
+  console.log("Added to cart:", ad)
+}
 </script>
 
 <template>
@@ -107,12 +83,12 @@ watch([searchQuery, selectedCategory, sortBy], () => { currentPage.value = 1 })
           </select>
         </div>
       </div>
-      
+
       <div v-if="paginatedAds.length > 0" class="ads-grid">
         <router-link v-for="ad in paginatedAds" :key="ad.id" :to="{ name: 'AdDetails', params: { id: ad.id } }"
           class="ad-card-link">
           <div class="ad-card">
-            <div class="ad-image" :style="{ backgroundImage: `url(${ad.image})` }"></div>
+            <div class="ad-image" :style="{ backgroundImage: `url(${getCoverImage(ad)})` }"></div>
 
             <div class="ad-details">
               <span class="ad-category">{{ ad.category }}</span>
@@ -120,53 +96,22 @@ watch([searchQuery, selectedCategory, sortBy], () => { currentPage.value = 1 })
 
               <div class="ad-chips">
                 <span class="chip chip-origin">
-                  <svg viewBox="0 0 24 24" width="12" height="12" stroke="currentColor" stroke-width="2" fill="none">
-                    <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0 1 18 0z"></path>
-                    <circle cx="12" cy="10" r="3"></circle>
-                  </svg>
-                  {{ ad.flowerDetails?.origin || 'Local' }}
+                  {{ ad.flower_details?.origin || ad.flowerDetails?.origin || 'Local' }}
                 </span>
-                <span class="chip chip-potted" v-if="ad.flowerDetails?.isPotted">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                    class="lucide lucide-amphora">
-                    <path d="M10 2v5.632c0 .424-.272.795-.653.982A6 6 0 0 0 6 14c.006 4 3 7 5 8" />
-                    <path d="M10 5H8a2 2 0 0 0 0 4h.68" />
-                    <path d="M14 2v5.632c0 .424.272.795.652.982A6 6 0 0 1 18 14c0 4-3 7-5 8" />
-                    <path d="M14 5h2a2 2 0 0 1 0 4h-.68" />
-                    <path d="M18 22H6" />
-                    <path d="M9 2h6" />
-                  </svg>
-                  Potted
-                </span>
-                <span class="chip chip-occasion" v-if="ad.flowerDetails?.occasion">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none"
-                    stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"
-                    class="lucide lucide-gift">
-                    <path d="M12 7v14" />
-                    <path d="M20 11v8a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2v-8" />
-                    <path d="M7.5 7a1 1 0 0 1 0-5A4.8 8 0 0 1 12 7a4.8 8 0 0 1 4.5-5 1 1 0 0 1 0 5" />
-                    <rect x="3" y="7" width="18" height="4" rx="1" />
-                  </svg>
-                  {{ ad.flowerDetails.occasion }}
+                <span class="chip chip-potted"
+                  v-if="ad.flower_details?.is_potted || ad.flowerDetails?.isPotted">Potted</span>
+                <span class="chip chip-occasion" v-if="ad.flower_details?.occasion || ad.flowerDetails?.occasion">
+                  {{ ad.flower_details?.occasion || ad.flowerDetails?.occasion }}
                 </span>
               </div>
             </div>
 
             <div class="card-footer">
               <div class="price-info">
-                <p class="ad-price">${{ ad.price }}</p>
+                <p class="ad-price">${{ Number(ad.price || 0).toFixed(2) }}</p>
                 <p class="ad-location">{{ ad.location }}</p>
               </div>
-              <button class="buy-btn" @click.prevent="addToCart(ad)">
-                <svg viewBox="0 0 24 24" width="16" height="16" stroke="currentColor" stroke-width="2" fill="none"
-                  stroke-linecap="round" stroke-linejoin="round">
-                  <path d="M6 2L3 6v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2V6l-3-4z"></path>
-                  <line x1="3" y1="6" x2="21" y2="6"></line>
-                  <path d="M16 10a4 4 0 0 1-8 0"></path>
-                </svg>
-                Buy
-              </button>
+              <button class="buy-btn" @click.prevent="addToCart(ad)">Buy</button>
             </div>
           </div>
         </router-link>
@@ -244,19 +189,6 @@ select {
 }
 
 .ad-card-link:hover .ad-card {
-  transform: translateY(-4px);
-  box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
-}
-
-.ad-card svg {
-  width: 16px;
-  height: 16px;
-  stroke-width: 2;
-  display: block;
-  flex-shrink: 0;
-}
-
-.ad-card:hover {
   transform: translateY(-4px);
   box-shadow: 0 10px 20px rgba(0, 0, 0, 0.05);
 }

@@ -24,7 +24,7 @@ const router = useRouter();
 
                 <div class="hero-actions">
                     <button class="btn btn-primary" @click="$router.push('/shop')">Shop Now</button>
-                    <button class="btn btn-secondary">Post an Ad</button>
+                    <button class="btn btn-secondary" @click="$router.push('create-ad')">Post an Ad</button>
                 </div>
             </div>
 

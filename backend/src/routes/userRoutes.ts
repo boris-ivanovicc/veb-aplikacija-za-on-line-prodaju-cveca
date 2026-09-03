@@ -4,12 +4,15 @@ import {
   loginUser,
   refreshUserToken,
   getProfile
-} from "../controllers/userController";  
+} from "../controllers/userController";
+import { authMiddleware } from "../middleware/authMiddleware";
 
 export const userRoutes = Router();
 
+userRoutes.post("/register", registerUser);
+userRoutes.post("/login", loginUser);
+userRoutes.post("/refresh", refreshUserToken);
 
-userRoutes.post("/user/register", registerUser);
-userRoutes.post("/user/login", loginUser);
-userRoutes.post("/user/refresh", refreshUserToken);
-userRoutes.get("/user/self", getProfile);
+userRoutes.get("/self", authMiddleware, getProfile);
+
+export default userRoutes;

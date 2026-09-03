@@ -1,12 +1,11 @@
 export type ad_images_file_type =
-  | 'jpg'
-  | 'jpeg'
-  | 'png'
+  'jpeg' | 'png';
 
 export interface AdImageInput {
   original_url: string;
   thumbnail_url?: string;
   file_type?: ad_images_file_type;
+  is_cover: boolean;
 }
 
 export interface AdInput {

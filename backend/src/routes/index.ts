@@ -1,13 +1,11 @@
 import "reflect-metadata";
-import express = require('express');
-import { DataSource } from "typeorm";
-
-const adRoutes = require('./adRoutes');
-const userRoutes = require('./userRoutes');
+import express from "express";
+import adRoutes from "./adRoutes";
+import userRoutes from "./userRoutes";
 
 const router = express.Router();
 
-router.use('/store', adRoutes);
-router.use('/users', userRoutes);
+router.use("/store", adRoutes);
+router.use("/users", userRoutes);
 
-module.exports = router;
+export default router;

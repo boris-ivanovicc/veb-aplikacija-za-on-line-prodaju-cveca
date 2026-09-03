@@ -6,21 +6,21 @@ const buildAdImagesPayload = (images?: AdImageInput[]) => {
     return [{
       original_url: "images/default-flower-image.jpg",
       thumbnail_url: "images/default-flower-thumbnail.jpg",
-      file_type: 'image_jpeg',
+      file_type: "jpeg",
       is_cover: true
     }];
   }
 
-  return images.map((img, index) => {
-    const isCover = index === 0;
-    
-    return {
-      original_url: img.original_url,
-      thumbnail_url: isCover ? (img.thumbnail_url || "") : "",
-      file_type: img.file_type?.toLowerCase().includes('png') ? 'image_png' : 'image_jpeg',
-      is_cover: isCover
-    };
-  });
+  const hasCoverSet = images.some(img => Number(img.is_cover) === 1);
+
+  return images.map((img, index) => ({
+    original_url: img.original_url,
+    thumbnail_url: img.thumbnail_url || "",
+    file_type: img.file_type === "png"
+      ? "png"
+      : "jpeg",
+    is_cover: hasCoverSet ? (Number(img.is_cover) === 1) : (index === 0)
+  }));
 };
 
 export const getActiveAds = async (pageNumber: number, itemsPerPage: number) => {
@@ -47,16 +47,19 @@ export const getActiveAds = async (pageNumber: number, itemsPerPage: number) => 
       (
         SELECT JSON_ARRAYAGG(
           JSON_OBJECT(
-            'id', ai.id,
-            'original_url', ai.original_url,
-            'thumbnail_url', ai.thumbnail_url,
-            'file_type', ai.file_type,
-            'is_cover', ai.is_cover
+            'id', sub.id,
+            'original_url', sub.original_url,
+            'thumbnail_url', sub.thumbnail_url,
+            'file_type', sub.file_type,
+            'is_cover', sub.is_cover
           )
         )
-        FROM ad_images ai
-        WHERE ai.ad_id = a.id
-        ORDER BY ai.is_cover DESC
+        FROM (
+          SELECT ai.id, ai.original_url, ai.thumbnail_url, ai.file_type, ai.is_cover
+          FROM ad_images ai
+          WHERE ai.ad_id = a.id
+          ORDER BY ai.is_cover DESC
+        ) sub
       ) as ad_images
     FROM ads a
     LEFT JOIN flower_details f ON a.id = f.ad_id
@@ -66,10 +69,16 @@ export const getActiveAds = async (pageNumber: number, itemsPerPage: number) => 
     LIMIT ? OFFSET ?
   `, ['active', itemsPerPage, skipAmount]);
 
-  const parsedAds = (ads as any[]).map(ad => ({
-    ...ad,
-    ad_images: ad.ad_images ? JSON.parse(ad.ad_images) : []
-  }));
+  const parsedAds = (ads as any[]).map(ad => {
+    let images = ad.ad_images;
+    if (images && typeof images === 'string') {
+      images = JSON.parse(images);
+    }
+    return {
+      ...ad,
+      ad_images: images || []
+    };
+  });
 
   return {
     ads: parsedAds,
@@ -94,16 +103,19 @@ export const getAdById = async (adId: number) => {
       (
         SELECT JSON_ARRAYAGG(
           JSON_OBJECT(
-            'id', ai.id,
-            'original_url', ai.original_url,
-            'thumbnail_url', ai.thumbnail_url,
-            'file_type', ai.file_type,
-            'is_cover', ai.is_cover
+            'id', sub.id,
+            'original_url', sub.original_url,
+            'thumbnail_url', sub.thumbnail_url,
+            'file_type', sub.file_type,
+            'is_cover', sub.is_cover
           )
         )
-        FROM ad_images ai
-        WHERE ai.ad_id = a.id
-        ORDER BY ai.is_cover DESC
+        FROM (
+          SELECT ai.id, ai.original_url, ai.thumbnail_url, ai.file_type, ai.is_cover
+          FROM ad_images ai
+          WHERE ai.ad_id = a.id
+          ORDER BY ai.is_cover DESC
+        ) sub
       ) as ad_images
     FROM ads a
     LEFT JOIN flower_details f ON a.id = f.ad_id
@@ -185,11 +197,21 @@ export const createAd = async (input: AdInput) => {
     );
 
     const imagePayload = buildAdImagesPayload(input.images);
+
     for (const img of imagePayload) {
+      const fileType = img.file_type?.replace('_', '/') ?? 'image/jpeg';
+
       await connection.query(
-        `INSERT INTO ad_images (ad_id, original_url, thumbnail_url, file_type, is_cover)
-         VALUES (?, ?, ?, ?, ?)`,
-        [adId, img.original_url, img.thumbnail_url, img.file_type, img.is_cover]
+        `INSERT INTO ad_images 
+        (ad_id, original_url, thumbnail_url, file_type, is_cover)
+        VALUES (?, ?, ?, ?, ?)`,
+        [
+          adId,
+          img.original_url,
+          img.thumbnail_url ?? null,
+          fileType,
+          img.is_cover ? 1 : 0
+        ]
       );
     }
 
@@ -298,5 +320,5 @@ export const deleteAd = async (adId: number) => {
     ['deleted', adId]
   );
 
-  return await getAdById(adId);
+  return { success: true, id: adId };
 };
