@@ -1,42 +1,60 @@
 <script setup>
-import { ref, computed, watch, onMounted } from 'vue'
+import { ref, computed, watch, onMounted, onActivated } from 'vue'
+import { useRouter } from 'vue-router'
+import Swal from 'sweetalert2'
 import MainLayout from '@/components/MainLayout.vue'
 import { MainService } from '@/services/main.service'
 
+const router = useRouter()
 const ads = ref([])
-
-onMounted(async () => {
-  try {
-    const rsp = await MainService.getAds()
-    ads.value = rsp.data?.data || (Array.isArray(rsp.data) ? rsp.data : (rsp.data?.ads || []))
-  } catch (err) {
-    console.error("Failed to load ads:", err)
-  }
-})
-
 const searchQuery = ref('')
 const selectedCategory = ref('')
 const sortBy = ref('newest')
 const currentPage = ref(1)
 const itemsPerPage = 9
 
+async function loadAds() {
+  try {
+    const rsp = await MainService.useAxios('/ads?page=1&limit=1000', 'get')
+    const rawData = rsp.data?.data?.ads || rsp.data?.data || rsp.data?.ads || rsp.data
+    ads.value = Array.isArray(rawData) ? rawData : []
+  } catch (err) {
+    console.error("Failed to load ads:", err)
+  }
+}
+
+onMounted(loadAds)
+onActivated(loadAds)
+
 const filteredAndSortedAds = computed(() => {
   let result = [...ads.value]
+
   if (searchQuery.value) {
     const query = searchQuery.value.toLowerCase()
-    result = result.filter(ad => ad.title.toLowerCase().includes(query))
+    result = result.filter(ad => ad.title?.toLowerCase().includes(query))
   }
+
   if (selectedCategory.value) {
-    result = result.filter(ad => ad.category === selectedCategory.value)
+    const targetCategory = selectedCategory.value.toLowerCase()
+    result = result.filter(ad => {
+      const adCat = (ad.category || '').toLowerCase()
+      const flowerOccasion = (ad.flower_details?.occasion || ad.flowerDetails?.occasion || '').toLowerCase()
+      const flowerName = (ad.flower_details?.flower_name || ad.flowerDetails?.flowerName || '').toLowerCase()
+
+      return adCat === targetCategory || 
+             flowerOccasion === targetCategory || 
+             flowerName.includes(targetCategory)
+    })
   }
 
   if (sortBy.value === 'price-low') {
-    result.sort((a, b) => a.price - b.price)
+    result.sort((a, b) => Number(a.price || 0) - Number(b.price || 0))
   } else if (sortBy.value === 'price-high') {
-    result.sort((a, b) => b.price - a.price)
+    result.sort((a, b) => Number(b.price || 0) - Number(a.price || 0))
   } else if (sortBy.value === 'newest') {
-    result.sort((a, b) => new Date(b.created_at || b.date) - new Date(a.created_at || a.date))
+    result.sort((a, b) => new Date(b.created_at || b.date || 0) - new Date(a.created_at || a.date || 0))
   }
+
   return result
 })
 
@@ -51,11 +69,60 @@ watch([searchQuery, selectedCategory, sortBy], () => { currentPage.value = 1 })
 function getCoverImage(ad) {
   if (!ad.ad_images || ad.ad_images.length === 0) return ''
   const coverImage = ad.ad_images.find(img => img.is_cover === 1 || img.is_cover === true)
-  return (coverImage || ad.ad_images[0])?.thumbnail_url || ''
+  return (coverImage || ad.ad_images[0])?.thumbnail_url || (coverImage || ad.ad_images[0])?.original_url || ''
 }
 
-function addToCart(ad) {
-  console.log("Added to cart:", ad)
+async function addToCart(ad) {
+  const authDataRaw = localStorage.getItem('flower_shop_auth')
+  let token = null
+
+  if (authDataRaw) {
+    try {
+      const parsed = JSON.parse(authDataRaw)
+      token = parsed.access || parsed.token || authDataRaw
+    } catch (e) {
+      token = authDataRaw 
+    }
+  }
+
+  if (!token) {
+    Swal.fire({
+      title: 'Please Log In',
+      text: 'You need an active account to reserve flowers.',
+      icon: 'info',
+      confirmButtonColor: '#059669'
+    })
+    return
+  }
+
+  try {
+    await MainService.useAxios('/cart/add', 'post', { ad_id: ad.id })
+
+    const result = await Swal.fire({
+      title: 'Added to Cart!',
+      text: `"${ad.title}" is held in your cart for 1 hour.`,
+      icon: 'success',
+      showCancelButton: true,
+      confirmButtonText: 'Go to Cart',
+      cancelButtonText: 'Continue Shopping',
+      confirmButtonColor: '#059669',
+      cancelButtonColor: '#6B7280'
+    })
+
+    if (result.isConfirmed) {
+      router.push('/cart')
+    } else {
+      await loadAds()
+    }
+  } catch (err) {
+    console.error('Failed to add to cart:', err)
+    Swal.fire({
+      title: 'Action Failed',
+      text: err.response?.data?.error || 'Could not reserve item.',
+      icon: 'warning',
+      confirmButtonColor: '#059669'
+    })
+  }
 }
 </script>
 
@@ -75,6 +142,7 @@ function addToCart(ad) {
             <option value="Bouquet">Bouquets</option>
             <option value="Indoor">Indoor Plants</option>
             <option value="Roses">Roses</option>
+            <option value="Gift">Gifts</option>
           </select>
           <select v-model="sortBy">
             <option value="newest">Newest First</option>
@@ -91,7 +159,7 @@ function addToCart(ad) {
             <div class="ad-image" :style="{ backgroundImage: `url(${getCoverImage(ad)})` }"></div>
 
             <div class="ad-details">
-              <span class="ad-category">{{ ad.category }}</span>
+              <span class="ad-category">{{ ad.category || ad.flower_details?.occasion || 'Flower' }}</span>
               <h3>{{ ad.title }}</h3>
 
               <div class="ad-chips">
@@ -109,7 +177,7 @@ function addToCart(ad) {
             <div class="card-footer">
               <div class="price-info">
                 <p class="ad-price">${{ Number(ad.price || 0).toFixed(2) }}</p>
-                <p class="ad-location">{{ ad.location }}</p>
+                <p class="ad-location">{{ ad.location || 'Local Shop' }}</p>
               </div>
               <button class="buy-btn" @click.prevent="addToCart(ad)">Buy</button>
             </div>

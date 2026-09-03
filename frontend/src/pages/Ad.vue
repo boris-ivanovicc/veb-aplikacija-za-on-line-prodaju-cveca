@@ -1,10 +1,12 @@
 <script setup>
 import { ref, onMounted, watch } from 'vue'
-import { useRoute } from 'vue-router'
+import { useRoute, useRouter } from 'vue-router'
+import Swal from 'sweetalert2'
 import MainLayout from '@/components/MainLayout.vue'
 import { MainService } from '@/services/main.service'
 
 const route = useRoute()
+const router = useRouter()
 const ad = ref(null)
 const activeImageIndex = ref(0)
 
@@ -41,6 +43,60 @@ const prevImage = () => {
 
 const setActiveImage = (index) => {
     activeImageIndex.value = index
+}
+
+async function addToCart() {
+    if (!ad.value) return
+
+    const authDataRaw = localStorage.getItem('flower_shop_auth')
+    let token = null
+
+    if (authDataRaw) {
+        try {
+            const parsed = JSON.parse(authDataRaw)
+            token = parsed.access || parsed.token || authDataRaw
+        } catch (e) {
+            token = authDataRaw 
+        }
+    }
+
+    if (!token) {
+        Swal.fire({
+            title: 'Please Log In',
+            text: 'You need an active account to reserve flowers.',
+            icon: 'info',
+            confirmButtonColor: '#059669'
+        })
+        return
+    }
+
+    try {
+        await MainService.useAxios('/cart/add', 'post', { ad_id: ad.value.id })
+
+        const result = await Swal.fire({
+            title: 'Added to Cart!',
+            text: `"${ad.value.title}" is held in your cart for 1 hour.`,
+            icon: 'success',
+            showCancelButton: true,
+            confirmButtonText: 'Go to Cart',
+            cancelButtonText: 'Continue Shopping',
+            confirmButtonColor: '#059669'
+        })
+
+        if (result.isConfirmed) {
+            router.push('/cart')
+        } else {
+            router.push('/shop')
+        }
+    } catch (err) {
+        console.error('Failed to add to cart:', err)
+        Swal.fire({
+            title: 'Action Failed',
+            text: err.response?.data?.error || 'Could not reserve item.',
+            icon: 'warning',
+            confirmButtonColor: '#059669'
+        })
+    }
 }
 </script>
 
@@ -79,7 +135,7 @@ const setActiveImage = (index) => {
                     </div>
                 </div>
 
-                <!-- Right column: details -->
+                
                 <div class="right-column">
                     <h1 class="product-title">{{ ad.title }}</h1>
                     <p class="location-text">📍 {{ ad.location || 'Location not specified' }}</p>
@@ -107,7 +163,7 @@ const setActiveImage = (index) => {
 
                     <div class="action-bar">
                         <p class="price">${{ Number(ad.price || 0).toFixed(2) }}</p>
-                        <button class="buy-btn">Buy</button>
+                        <button class="buy-btn" @click="addToCart">Buy</button>
                     </div>
                 </div>
             </div>

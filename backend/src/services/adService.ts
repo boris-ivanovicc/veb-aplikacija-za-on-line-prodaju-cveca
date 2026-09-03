@@ -1,5 +1,6 @@
 import pool from '../config/db';
 import { AdInput, AdUpdateInput, AdImageInput } from "./types";
+import { releaseExpiredReservations } from './cartService'; 
 
 const buildAdImagesPayload = (images?: AdImageInput[]) => {
   if (!images || images.length === 0) {
@@ -13,22 +14,34 @@ const buildAdImagesPayload = (images?: AdImageInput[]) => {
 
   const hasCoverSet = images.some(img => Number(img.is_cover) === 1);
 
-  return images.map((img, index) => ({
-    original_url: img.original_url,
-    thumbnail_url: img.thumbnail_url || "",
-    file_type: img.file_type === "png"
-      ? "png"
-      : "jpeg",
-    is_cover: hasCoverSet ? (Number(img.is_cover) === 1) : (index === 0)
-  }));
+  return images.map((img, index) => {
+    let cleanType = "jpeg";
+
+    if (typeof img.file_type === "string" && img.file_type.length < 20) {
+      cleanType = img.file_type.toLowerCase().includes("png") ? "png" : "jpeg";
+    } else if (typeof img.original_url === "string" && img.original_url.startsWith("data:image/")) {
+      cleanType = img.original_url.includes("png") ? "png" : "jpeg";
+    }
+
+    return {
+      original_url: img.original_url,
+      thumbnail_url: img.thumbnail_url || "",
+      file_type: cleanType,
+      is_cover: hasCoverSet ? (Number(img.is_cover) === 1) : (index === 0)
+    };
+  });
 };
 
 export const getActiveAds = async (pageNumber: number, itemsPerPage: number) => {
+  await releaseExpiredReservations();
+
   const skipAmount = (pageNumber - 1) * itemsPerPage;
 
   const [countResult] = await pool.query(
-    'SELECT COUNT(*) as total FROM ads WHERE ad_status = ?',
-    ['active']
+    `SELECT COUNT(*) as total 
+     FROM ads 
+     WHERE (status = 'available' OR status IS NULL) 
+       AND (ad_status = 'active' OR ad_status IS NULL)`
   );
   const totalCount = (countResult as any[])[0].total;
 
@@ -64,15 +77,20 @@ export const getActiveAds = async (pageNumber: number, itemsPerPage: number) => 
     FROM ads a
     LEFT JOIN flower_details f ON a.id = f.ad_id
     LEFT JOIN users u ON a.user_id = u.id
-    WHERE a.ad_status = ?
+    WHERE (a.status = 'available' OR a.status IS NULL)
+      AND (a.ad_status = 'active' OR a.ad_status IS NULL)
     ORDER BY a.created_at DESC
     LIMIT ? OFFSET ?
-  `, ['active', itemsPerPage, skipAmount]);
+  `, [itemsPerPage, skipAmount]);
 
   const parsedAds = (ads as any[]).map(ad => {
     let images = ad.ad_images;
     if (images && typeof images === 'string') {
-      images = JSON.parse(images);
+      try {
+        images = JSON.parse(images);
+      } catch (e) {
+        images = [];
+      }
     }
     return {
       ...ad,
@@ -130,7 +148,11 @@ export const getAdById = async (adId: number) => {
 
   const ad = ads[0];
   if (ad.ad_images && typeof ad.ad_images === 'string') {
-    ad.ad_images = JSON.parse(ad.ad_images);
+    try {
+      ad.ad_images = JSON.parse(ad.ad_images);
+    } catch (e) {
+      ad.ad_images = [];
+    }
   }
 
   if (ad.user_id) {
@@ -176,9 +198,9 @@ export const createAd = async (input: AdInput) => {
 
   try {
     const [adResult] = await connection.query(
-      `INSERT INTO ads (title, ad_description, price, user_id, ad_status) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [input.title, input.ad_description, input.price, input.user_id, 'active']
+      `INSERT INTO ads (title, ad_description, price, user_id, ad_status, status) 
+       VALUES (?, ?, ?, ?, ?, ?)`,
+      [input.title, input.ad_description, input.price, input.user_id, 'active', 'available']
     );
     const adId = (adResult as any).insertId;
 
@@ -199,17 +221,17 @@ export const createAd = async (input: AdInput) => {
     const imagePayload = buildAdImagesPayload(input.images);
 
     for (const img of imagePayload) {
-      const fileType = img.file_type?.replace('_', '/') ?? 'image/jpeg';
+      const safeFileType = img.file_type === 'png' ? 'png' : 'jpeg';
 
       await connection.query(
         `INSERT INTO ad_images 
-        (ad_id, original_url, thumbnail_url, file_type, is_cover)
-        VALUES (?, ?, ?, ?, ?)`,
+         (ad_id, original_url, thumbnail_url, file_type, is_cover)
+         VALUES (?, ?, ?, ?, ?)`,
         [
           adId,
           img.original_url,
           img.thumbnail_url ?? null,
-          fileType,
+          safeFileType,
           img.is_cover ? 1 : 0
         ]
       );
