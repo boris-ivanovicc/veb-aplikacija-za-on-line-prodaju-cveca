@@ -76,7 +76,7 @@ onMounted(loadCartData)
         <p>Loading your cart...</p>
       </div>
 
-      <!-- Active Cart Items -->
+
       <div v-else-if="cartItems.length > 0" class="cart-layout">
         <div class="cart-items-list">
           <div v-for="item in cartItems" :key="item.item_id" class="cart-item-card">
@@ -107,7 +107,7 @@ onMounted(loadCartData)
 
       <p v-else class="empty-cart">Your cart is currently empty.</p>
 
-      <!-- Purchase History -->
+
       <div v-if="purchaseHistory.length > 0" class="history-section">
         <h2>Order History & Previous Purchases</h2>
         <div class="history-grid">

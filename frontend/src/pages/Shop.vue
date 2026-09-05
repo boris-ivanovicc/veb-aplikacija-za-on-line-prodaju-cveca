@@ -111,7 +111,14 @@ async function addToCart(ad) {
       title: 'Please Log In',
       text: 'You need an active account to reserve flowers.',
       icon: 'info',
+      showCancelButton: true,
+      confirmButtonText: 'Log In',
+      cancelButtonText: 'Cancel',
       confirmButtonColor: '#059669'
+    }).then((result) => {
+      if (result.isConfirmed) {
+        router.push('/login')
+      }
     })
     return
   }

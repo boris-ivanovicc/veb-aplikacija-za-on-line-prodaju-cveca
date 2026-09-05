@@ -1,7 +1,11 @@
 <script setup lang="ts">
-import { ref } from 'vue'
+import { ref, onMounted } from 'vue'
+import { useRouter } from 'vue-router'
+import Swal from 'sweetalert2'
 import { MainService } from '@/services/main.service'
 import MainLayout from '@/components/MainLayout.vue'
+
+const router = useRouter()
 
 type AdImageFileType = 'jpeg' | 'png'
 
@@ -30,6 +34,44 @@ const newAd = ref({
 
 const isSubmitting = ref(false)
 const message = ref('')
+
+const checkAuthAndRedirect = () => {
+    const authDataRaw = localStorage.getItem('flower_shop_auth')
+    let token = null
+
+    if (authDataRaw) {
+        try {
+            const parsed = JSON.parse(authDataRaw)
+            token = parsed.access || parsed.token || authDataRaw
+        } catch (e) {
+            token = authDataRaw
+        }
+    }
+
+    if (!token) {
+        Swal.fire({
+            title: 'Please Log In',
+            text: 'You need an active account to create an ad.',
+            icon: 'info',
+            showCancelButton: true,
+            confirmButtonText: 'Log In',
+            cancelButtonText: 'Cancel',
+            confirmButtonColor: '#059669'
+        }).then((result) => {
+            if (result.isConfirmed) {
+                router.push('/login')
+            } else {
+                router.push('/')
+            }
+        })
+        return false
+    }
+    return true
+}
+
+onMounted(() => {
+    checkAuthAndRedirect()
+})
 
 function handleFileUpload(event: Event) {
     const input = event.target as HTMLInputElement
@@ -99,6 +141,8 @@ function setCover(index: number) {
 }
 
 async function submitAd() {
+    if (!checkAuthAndRedirect()) return
+
     isSubmitting.value = true
     message.value = ''
 
@@ -121,27 +165,27 @@ async function submitAd() {
 
     try {
         await MainService.createAd(payload)
-        message.value = 'Ad created successfully!'
-        newAd.value = {
-            title: '',
-            price: 0,
-            location: '',
-            description: '',
-            endsAt: '',
-            flowerDetails: {
-                origin: '',
-                sizeCm: null,
-                lifespanDays: null,
-                occasion: '',
-                isPotted: false
-            },
-            images: [] as AdImageInput[]
-        }
+        
+        await Swal.fire({
+            title: 'Success!',
+            text: 'Your ad has been created successfully.',
+            icon: 'success',
+            confirmButtonColor: '#059669'
+        })
+
+        router.push('/shop')
     } catch (err: any) {
         message.value =
             err.response?.status === 413
                 ? 'Image size too large. Try fewer or smaller images.'
                 : 'Error creating ad.'
+        
+        Swal.fire({
+            title: 'Action Failed',
+            text: message.value,
+            icon: 'warning',
+            confirmButtonColor: '#059669'
+        })
     } finally {
         isSubmitting.value = false
     }

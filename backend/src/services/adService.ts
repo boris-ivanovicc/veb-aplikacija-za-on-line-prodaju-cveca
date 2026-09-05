@@ -1,6 +1,6 @@
 import pool from '../config/db';
 import { AdInput, AdUpdateInput, AdImageInput } from "./types";
-import { releaseExpiredReservations } from './cartService'; 
+import { releaseExpiredReservations } from './cartService';
 
 const buildAdImagesPayload = (images?: AdImageInput[]) => {
   if (!images || images.length === 0) {
@@ -189,7 +189,7 @@ export const getAdById = async (adId: number) => {
 };
 
 export const createAd = async (input: AdInput) => {
-  if (!input.title || !input.price || !input.user_id || !input.details?.flower_name) {
+  if (!input.title || input.price === undefined || !input.user_id || !input.details?.flower_name) {
     throw new Error("Missing required fields to create an ad.");
   }
 
@@ -198,9 +198,9 @@ export const createAd = async (input: AdInput) => {
 
   try {
     const [adResult] = await connection.query(
-      `INSERT INTO ads (title, ad_description, price, user_id, ad_status, status) 
-       VALUES (?, ?, ?, ?, ?, ?)`,
-      [input.title, input.ad_description, input.price, input.user_id, 'active', 'available']
+      `INSERT INTO ads (title, ad_description, price, user_id, ad_status) 
+       VALUES (?, ?, ?, ?, ?)`,
+      [input.title, input.ad_description || '', input.price, input.user_id, 'active']
     );
     const adId = (adResult as any).insertId;
 
