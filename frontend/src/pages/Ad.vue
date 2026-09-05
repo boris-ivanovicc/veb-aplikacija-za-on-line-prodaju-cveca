@@ -56,7 +56,7 @@ async function addToCart() {
             const parsed = JSON.parse(authDataRaw)
             token = parsed.access || parsed.token || authDataRaw
         } catch (e) {
-            token = authDataRaw 
+            token = authDataRaw
         }
     }
 
@@ -135,7 +135,6 @@ async function addToCart() {
                     </div>
                 </div>
 
-                
                 <div class="right-column">
                     <h1 class="product-title">{{ ad.title }}</h1>
                     <p class="location-text">📍 {{ ad.location || 'Location not specified' }}</p>
@@ -158,6 +157,10 @@ async function addToCart() {
                         <div class="spec-card">
                             <span class="spec-label">Occasion</span>
                             <span class="spec-value">{{ ad.flower_details?.occasion || 'General' }}</span>
+                        </div>
+                        <div class="spec-card full-width" v-if="ad.ends_at">
+                            <span class="spec-label">Expires At</span>
+                            <span class="spec-value">{{ new Date(ad.ends_at).toLocaleString() }}</span>
                         </div>
                     </div>
 
@@ -313,6 +316,10 @@ async function addToCart() {
     padding: 0.8rem;
     border-radius: 8px;
     border: 1px solid #e2e8f0;
+}
+
+.spec-card.full-width {
+    grid-column: span 2;
 }
 
 .spec-label {

@@ -14,10 +14,10 @@ interface AdImageInput {
 
 const newAd = ref({
     title: '',
-    category: '',
     price: 0,
     location: '',
     description: '',
+    endsAt: '',
     flowerDetails: {
         origin: '',
         sizeCm: null as number | null,
@@ -104,10 +104,10 @@ async function submitAd() {
 
     const payload = {
         title: newAd.value.title,
-        category: newAd.value.category,
         location: newAd.value.location,
         price: Number(newAd.value.price),
         ad_description: newAd.value.description,
+        ends_at: newAd.value.endsAt || null,
         details: {
             flower_name: newAd.value.title,
             occasion: newAd.value.flowerDetails.occasion,
@@ -124,10 +124,10 @@ async function submitAd() {
         message.value = 'Ad created successfully!'
         newAd.value = {
             title: '',
-            category: '',
             price: 0,
             location: '',
             description: '',
+            endsAt: '',
             flowerDetails: {
                 origin: '',
                 sizeCm: null,
@@ -160,16 +160,6 @@ async function submitAd() {
                 </label>
 
                 <label>
-                    Category
-                    <select v-model="newAd.category" required>
-                        <option value="">Select category</option>
-                        <option value="Bouquet">Bouquet</option>
-                        <option value="Indoor">Indoor Plant</option>
-                        <option value="Roses">Roses</option>
-                    </select>
-                </label>
-
-                <label>
                     Price
                     <input type="number" v-model.number="newAd.price" required />
                 </label>
@@ -177,6 +167,11 @@ async function submitAd() {
                 <label>
                     Location
                     <input v-model="newAd.location" required />
+                </label>
+
+                <label>
+                    Ends At
+                    <input type="datetime-local" v-model="newAd.endsAt" />
                 </label>
 
                 <label>
@@ -194,7 +189,8 @@ async function submitAd() {
                         <img :src="img.thumbnail_url" />
                         <div class="actions-overlay">
                             <button type="button" @click="setCover(index)" :class="{ active: img.is_cover }">
-                                {{ img.is_cover ? 'Cover' : 'Set Cover' }} </button>
+                                {{ img.is_cover ? 'Cover' : 'Set Cover' }}
+                            </button>
                             <button type="button" @click="removeImage(index)" class="delete-btn">
                                 Delete
                             </button>
@@ -221,7 +217,15 @@ async function submitAd() {
 
                 <label>
                     Occasion
-                    <input v-model="newAd.flowerDetails.occasion" />
+                    <select v-model="newAd.flowerDetails.occasion">
+                        <option disabled value="">Select an occasion</option>
+                        <option value="Birthday">Birthday</option>
+                        <option value="Anniversary">Anniversary</option>
+                        <option value="Wedding">Wedding</option>
+                        <option value="Valentine">Valentine</option>
+                        <option value="Mother's Day">Mother's Day</option>
+                        <option value="General">General / Everyday</option>
+                    </select>
                 </label>
 
                 <label class="checkbox-label">

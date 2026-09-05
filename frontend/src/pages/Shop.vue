@@ -8,7 +8,8 @@ import { MainService } from '@/services/main.service'
 const router = useRouter()
 const ads = ref([])
 const searchQuery = ref('')
-const selectedCategory = ref('')
+const selectedOccasion = ref('')
+const pottedOnly = ref(false)
 const sortBy = ref('newest')
 const currentPage = ref(1)
 const itemsPerPage = 9
@@ -16,8 +17,15 @@ const itemsPerPage = 9
 async function loadAds() {
   try {
     const rsp = await MainService.useAxios('/ads?page=1&limit=1000', 'get')
+
     const rawData = rsp.data?.data?.ads || rsp.data?.data || rsp.data?.ads || rsp.data
-    ads.value = Array.isArray(rawData) ? rawData : []
+
+    ads.value = Array.isArray(rawData) ? rawData.map(ad => ({
+      ...ad,
+      _normalizedOccasion: ad.occasion || '',
+      _normalizedOrigin: ad.origin || 'Local',
+      _normalizedIsPotted: Boolean(ad.is_potted === 1 || ad.is_potted === true || ad.is_potted === '1')
+    })) : []
   } catch (err) {
     console.error("Failed to load ads:", err)
   }
@@ -26,25 +34,38 @@ async function loadAds() {
 onMounted(loadAds)
 onActivated(loadAds)
 
+const availableOccasions = computed(() => {
+  const set = new Set()
+  ads.value.forEach(ad => {
+    if (ad._normalizedOccasion) set.add(ad._normalizedOccasion.trim())
+  })
+  return Array.from(set).sort()
+})
+
 const filteredAndSortedAds = computed(() => {
   let result = [...ads.value]
 
   if (searchQuery.value) {
-    const query = searchQuery.value.toLowerCase()
-    result = result.filter(ad => ad.title?.toLowerCase().includes(query))
+    const query = searchQuery.value.toLowerCase().trim()
+    result = result.filter(ad => {
+      const title = (ad.title || '').toLowerCase()
+      const occasion = ad._normalizedOccasion.toLowerCase()
+      const origin = ad._normalizedOrigin.toLowerCase()
+
+      return title.includes(query) || occasion.includes(query) || origin.includes(query)
+    })
   }
 
-  if (selectedCategory.value) {
-    const targetCategory = selectedCategory.value.toLowerCase()
+  if (selectedOccasion.value) {
+    const targetOccasion = selectedOccasion.value.toLowerCase().trim()
     result = result.filter(ad => {
-      const adCat = (ad.category || '').toLowerCase()
-      const flowerOccasion = (ad.flower_details?.occasion || ad.flowerDetails?.occasion || '').toLowerCase()
-      const flowerName = (ad.flower_details?.flower_name || ad.flowerDetails?.flowerName || '').toLowerCase()
-
-      return adCat === targetCategory || 
-             flowerOccasion === targetCategory || 
-             flowerName.includes(targetCategory)
+      const flowerOccasion = ad._normalizedOccasion.toLowerCase().trim()
+      return flowerOccasion === targetOccasion
     })
+  }
+
+  if (pottedOnly.value) {
+    result = result.filter(ad => ad._normalizedIsPotted === true)
   }
 
   if (sortBy.value === 'price-low') {
@@ -64,7 +85,7 @@ const paginatedAds = computed(() => {
   return filteredAndSortedAds.value.slice(start, start + itemsPerPage)
 })
 
-watch([searchQuery, selectedCategory, sortBy], () => { currentPage.value = 1 })
+watch([searchQuery, selectedOccasion, pottedOnly, sortBy], () => { currentPage.value = 1 })
 
 function getCoverImage(ad) {
   if (!ad.ad_images || ad.ad_images.length === 0) return ''
@@ -81,7 +102,7 @@ async function addToCart(ad) {
       const parsed = JSON.parse(authDataRaw)
       token = parsed.access || parsed.token || authDataRaw
     } catch (e) {
-      token = authDataRaw 
+      token = authDataRaw
     }
   }
 
@@ -135,21 +156,27 @@ async function addToCart(ad) {
       </header>
 
       <div class="shop-controls">
-        <input v-model="searchQuery" type="text" placeholder="Search flowers..." class="search-input" />
+        <input v-model="searchQuery" type="text" placeholder="Search title, origin, occasion..." class="search-input" />
+
         <div class="control-groups">
-          <select v-model="selectedCategory">
-            <option value="">All Categories</option>
-            <option value="Bouquet">Bouquets</option>
-            <option value="Indoor">Indoor Plants</option>
-            <option value="Roses">Roses</option>
-            <option value="Gift">Gifts</option>
+          <select v-model="selectedOccasion">
+            <option value="">All Occasions</option>
+            <option v-for="occ in availableOccasions" :key="occ" :value="occ">{{ occ }}</option>
           </select>
+
           <select v-model="sortBy">
             <option value="newest">Newest First</option>
             <option value="price-low">Price: Low to High</option>
             <option value="price-high">Price: High to Low</option>
           </select>
         </div>
+      </div>
+
+      <div class="filter-toggles">
+        <label class="checkbox-filter">
+          <input type="checkbox" v-model="pottedOnly" />
+          Show Potted Plants Only
+        </label>
       </div>
 
       <div v-if="paginatedAds.length > 0" class="ads-grid">
@@ -159,17 +186,16 @@ async function addToCart(ad) {
             <div class="ad-image" :style="{ backgroundImage: `url(${getCoverImage(ad)})` }"></div>
 
             <div class="ad-details">
-              <span class="ad-category">{{ ad.category || ad.flower_details?.occasion || 'Flower' }}</span>
+              <span class="ad-category">{{ ad._normalizedOccasion || 'Any' }}</span>
               <h3>{{ ad.title }}</h3>
 
               <div class="ad-chips">
                 <span class="chip chip-origin">
-                  {{ ad.flower_details?.origin || ad.flowerDetails?.origin || 'Local' }}
+                  {{ ad._normalizedOrigin }}
                 </span>
-                <span class="chip chip-potted"
-                  v-if="ad.flower_details?.is_potted || ad.flowerDetails?.isPotted">Potted</span>
-                <span class="chip chip-occasion" v-if="ad.flower_details?.occasion || ad.flowerDetails?.occasion">
-                  {{ ad.flower_details?.occasion || ad.flowerDetails?.occasion }}
+                <span class="chip chip-potted" v-if="ad._normalizedIsPotted">Potted</span>
+                <span class="chip chip-occasion" v-if="ad._normalizedOccasion">
+                  {{ ad._normalizedOccasion }}
                 </span>
               </div>
             </div>
@@ -216,7 +242,20 @@ async function addToCart(ad) {
   justify-content: space-between;
   flex-wrap: wrap;
   gap: 1rem;
+  margin-bottom: 1rem;
+}
+
+.filter-toggles {
   margin-bottom: 2rem;
+}
+
+.checkbox-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.5rem;
+  font-size: 0.9rem;
+  cursor: pointer;
+  user-select: none;
 }
 
 .search-input,
