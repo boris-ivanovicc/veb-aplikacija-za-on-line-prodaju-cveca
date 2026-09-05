@@ -4,19 +4,19 @@ export class Alerts {
 
     static showError(message: string) {
         Swal.fire({
-            title: "Greška",
+            title: "Error",
             text: message,
             icon: "error",
-            confirmButtonText: "U redu"
+            confirmButtonText: "Okay"
         });
     }
 
     static showSuccess(message: string) {
         Swal.fire({
-            title: "Uspešno",
+            title: "Success",
             text: message,
             icon: "success",
-            confirmButtonText: "U redu"
+            confirmButtonText: "Okay"
         });
     }
 
@@ -29,8 +29,8 @@ export class Alerts {
             title: message,
             icon: "question",
             showCancelButton: true,
-            confirmButtonText: "Da",
-            cancelButtonText: "Ne"
+            confirmButtonText: "Yes",
+            cancelButtonText: "No"
         }).then(result => {
 
             if (result.isConfirmed) {

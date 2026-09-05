@@ -16,7 +16,7 @@ const itemsPerPage = 9
 
 async function loadAds() {
   try {
-    const rsp = await MainService.useAxios('/ads?page=1&limit=1000', 'get')
+    const rsp = await MainService.useAxios('/ads?page=1&limit=12', 'get')
 
     const rawData = rsp.data?.data?.ads || rsp.data?.data || rsp.data?.ads || rsp.data
 

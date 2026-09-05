@@ -17,6 +17,7 @@ import { FlowerDetails } from "./flowerDetails";
 @Index("idx_ads_user_id", ["userId"])
 @Index("idx_ads_status", ["adStatus"])
 @Index("idx_ads_created_at", ["createdAt"])
+  @Index("idx_ads_location", ["location"])
 export class Ads {
   @PrimaryGeneratedColumn({ type: "int", name: "id", unsigned: true })
   id!: number;
@@ -56,6 +57,13 @@ export class Ads {
     nullable: true,
   })
   endsAt!: Date | null;
+
+  @Column("varchar", {
+    name: "location", 
+    length: 100, 
+    nullable: true 
+  })
+  location!: string | null;
 
   @ManyToOne(() => Users, (user) => user.ads, { onDelete: "CASCADE" })
   @JoinColumn({ name: "user_id" })

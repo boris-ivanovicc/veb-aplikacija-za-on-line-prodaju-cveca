@@ -56,24 +56,7 @@ export const getActiveAds = async (pageNumber: number, itemsPerPage: number) => 
       f.is_potted,
       u.id as user_id,
       u.display_name,
-      u.avatar_url,
-      (
-        SELECT JSON_ARRAYAGG(
-          JSON_OBJECT(
-            'id', sub.id,
-            'original_url', sub.original_url,
-            'thumbnail_url', sub.thumbnail_url,
-            'file_type', sub.file_type,
-            'is_cover', sub.is_cover
-          )
-        )
-        FROM (
-          SELECT ai.id, ai.original_url, ai.thumbnail_url, ai.file_type, ai.is_cover
-          FROM ad_images ai
-          WHERE ai.ad_id = a.id
-          ORDER BY ai.is_cover DESC
-        ) sub
-      ) as ad_images
+      u.avatar_url
     FROM ads a
     LEFT JOIN flower_details f ON a.id = f.ad_id
     LEFT JOIN users u ON a.user_id = u.id
@@ -83,18 +66,41 @@ export const getActiveAds = async (pageNumber: number, itemsPerPage: number) => 
     LIMIT ? OFFSET ?
   `, [itemsPerPage, skipAmount]);
 
-  const parsedAds = (ads as any[]).map(ad => {
-    let images = ad.ad_images;
-    if (images && typeof images === 'string') {
-      try {
-        images = JSON.parse(images);
-      } catch (e) {
-        images = [];
-      }
-    }
+  const adList = ads as any[];
+  if (adList.length === 0) {
+    return { ads: [], totalCount };
+  }
+
+  const adIds = adList.map(ad => ad.id);
+
+  const [imagesRows] = await pool.query(`
+    SELECT id, ad_id, original_url, thumbnail_url, file_type, is_cover
+    FROM ad_images
+    WHERE ad_id IN (?)
+    ORDER BY is_cover DESC
+  `, [adIds]);
+
+  const imagesList = imagesRows as any[];
+
+  const parsedAds = adList.map(ad => {
+    const adImages = imagesList
+      .filter(img => img.ad_id === ad.id)
+      .map(img => ({
+        id: img.id,
+        original_url: img.original_url,
+        thumbnail_url: img.thumbnail_url,
+        file_type: img.file_type,
+        is_cover: Boolean(img.is_cover)
+      }));
+
     return {
       ...ad,
-      ad_images: images || []
+      ad_images: adImages.length > 0 ? adImages : [{
+        original_url: "images/default-flower-image.jpg",
+        thumbnail_url: "images/default-flower-thumbnail.jpg",
+        file_type: "jpeg",
+        is_cover: true
+      }]
     };
   });
 
@@ -117,24 +123,7 @@ export const getAdById = async (adId: number) => {
       u.id as user_id,
       u.display_name,
       u.avatar_url,
-      u.created_at as user_created_at,
-      (
-        SELECT JSON_ARRAYAGG(
-          JSON_OBJECT(
-            'id', sub.id,
-            'original_url', sub.original_url,
-            'thumbnail_url', sub.thumbnail_url,
-            'file_type', sub.file_type,
-            'is_cover', sub.is_cover
-          )
-        )
-        FROM (
-          SELECT ai.id, ai.original_url, ai.thumbnail_url, ai.file_type, ai.is_cover
-          FROM ad_images ai
-          WHERE ai.ad_id = a.id
-          ORDER BY ai.is_cover DESC
-        ) sub
-      ) as ad_images
+      u.created_at as user_created_at
     FROM ads a
     LEFT JOIN flower_details f ON a.id = f.ad_id
     LEFT JOIN users u ON a.user_id = u.id
@@ -147,13 +136,18 @@ export const getAdById = async (adId: number) => {
   }
 
   const ad = ads[0];
-  if (ad.ad_images && typeof ad.ad_images === 'string') {
-    try {
-      ad.ad_images = JSON.parse(ad.ad_images);
-    } catch (e) {
-      ad.ad_images = [];
-    }
-  }
+
+  const [imageRows] = await pool.query(`
+    SELECT id, original_url, thumbnail_url, file_type, is_cover
+    FROM ad_images
+    WHERE ad_id = ?
+    ORDER BY is_cover DESC
+  `, [adId]);
+
+  ad.ad_images = (imageRows as any[]).map(img => ({
+    ...img,
+    is_cover: Boolean(img.is_cover)
+  }));
 
   if (ad.user_id) {
     ad.users = {
@@ -197,10 +191,20 @@ export const createAd = async (input: AdInput) => {
   await connection.beginTransaction();
 
   try {
+    const endsAtValue = input.ends_at || input.ends_at || null;
+
     const [adResult] = await connection.query(
-      `INSERT INTO ads (title, ad_description, price, user_id, ad_status) 
-       VALUES (?, ?, ?, ?, ?)`,
-      [input.title, input.ad_description || '', input.price, input.user_id, 'active']
+      `INSERT INTO ads (title, ad_description, price, location, ends_at, user_id, ad_status) 
+       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      [
+        input.title,
+        input.ad_description || '',
+        input.price,
+        input.location || null,
+        endsAtValue,
+        input.user_id,
+        'active'
+      ]
     );
     const adId = (adResult as any).insertId;
 
@@ -272,6 +276,16 @@ export const updateAd = async (adId: number, input: AdUpdateInput) => {
     if (input.price !== undefined) {
       updates.push('price = ?');
       values.push(input.price);
+    }
+    if (input.location !== undefined) {
+      updates.push('location = ?');
+      values.push(input.location);
+    }
+
+    const endsAtInput = input.ends_at !== undefined ? input.ends_at : input.ends_at;
+    if (endsAtInput !== undefined) {
+      updates.push('ends_at = ?');
+      values.push(endsAtInput);
     }
 
     if (updates.length > 0) {

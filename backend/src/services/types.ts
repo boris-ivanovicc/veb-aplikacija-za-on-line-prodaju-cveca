@@ -13,6 +13,8 @@ export interface AdInput {
   ad_description?: string;
   price: number;
   user_id: number;
+  location?: string;
+  ends_at?: string;
   details: {
     flower_name: string;
     occasion?: string;
@@ -28,6 +30,8 @@ export interface AdUpdateInput {
   title?: string;
   ad_description?: string;
   price?: number;
+  location?: string;
+  ends_at?: string;
   details?: {
     flower_name?: string;
     occasion?: string;
